@@ -1,0 +1,118 @@
+//-------------------------------
+//	Group n. 08 - Laboratory n. 06
+//	Title: A simple digital filter
+//	C-like pseudocode
+//-------------------------------
+
+int n = 0;
+bool reset = 0;
+bool start = 0;
+bool done = false;
+bool EN_CNT0 = 0;
+bool CNT1 = 0;
+
+signed int Y13s[13];     // Array to store 13-bit signed intermediate results
+signed int Y8s[8];       // Array to store 8-bit signed output values
+signed int MEM_A[1024];  // Input memory
+signed int MEM_B[1024];  // Output memory
+
+while (true) {
+    if (reset == 0){
+        state = RESET;   // If reset is low, go to RESET state
+    }
+
+    switch (state) {
+        case RESET:
+            n = 0;             // Reset counter
+            EN_CNT0 = 0;       // Disable counter enable
+            done = false;      // Mark process as not done
+            state = IDLE;      // Move to IDLE state
+            break;
+
+        case IDLE:
+            if (start == 1) {
+                state = GET_DATA;  // Start process if 'start' is high
+            }else if (start == 0){
+                state = IDLE;      // Remain in IDLE if 'start' is low
+            }
+            break;
+
+        case GET_DATA:
+            n = 0;                  // Reset counter
+            for(int n = 0; n < 1024; n++){
+                X[n] = MEM_A[n];    // Load data from input memory
+            }
+            if(CNT1 == 1){
+                state = PROCESSING_DATA;  // Move to processing if CNT1 is high
+            }else if(CNT1 == 0){
+                state = GET_DATA;         // Stay in GET_DATA otherwise
+            }
+            // State Output
+            EN_CNT0 = 0;   // Keep counter disabled
+            
+            break;
+
+        case PROCESSING_DATA:
+            n = 0;
+            for(int i = 0; i < 1024; i++){
+                Y13s = dataPath(n, X[n], X[n-1], X[n-2], X[n-3]);  // Apply digital filter
+                Y8s = converterUnit(Y13s);                          // Convert to 8-bit signed
+                MEM_B[n] = Y8s;                                     // Store result in output memory
+            }
+
+            if(CNT1 == 1){
+                state = ENDOFTASK;        // Move to end state if CNT1 is high
+            }else if(CNT1 == 0){
+                state = PROCESSING_DATA;  // Repeat processing otherwise
+            }
+            // State Output
+            EN_CNT0 = 0;   // Keep counter disabled
+
+            break;
+
+        case ENDOFTASK:
+            if(n == 1023){
+                done = true;  // Set done flag if all data processed
+                CNT1 = 0;     // Reset CNT1
+            }else{
+                done = false;
+            }
+        
+            if (start == 1) {
+                n = 0;
+                state = GET_DATA;     // Restart process if 'start' is high
+            }if else(start == 0){
+                state = ENDOFTASK;    // Stay in end state otherwise
+            }
+            //State Output
+            done = 1;  // Output done signal
+
+            break;
+    }
+}
+
+// Function to compute filtered output
+function Y13s = dataPath(n, X[n], X[n-1], X[n-2], X[n-3]){
+    Y13s = -0.5 * X[n] - 2 * X[n-1] + 4 * X[n-2] + 0.25 * X[n-3];
+    return Y13s;
+}
+
+// Function to convert 13-bit result to 8-bit signed value
+function Y8s = converterUnit(Y13s) {
+    if (Y13s[1] == 1)
+        Y11s = Y13s[12:2] + 1;   // Round up if necessary
+    else
+        Y11s = Y13s[12:2];
+
+    Y11i = to_integer(Y11s);     // Convert to integer
+
+    if (Y11i > 127)
+        Y8i = 127;               // Clamp to max positive value
+    else if (Y11i < -128)
+        Y8i = -128;              // Clamp to max negative value
+    else
+        Y8i = Y11i;
+
+    Y8s = to_signed(Y8i);        // Convert to signed 8-bit format
+    return Y8s;
+}
